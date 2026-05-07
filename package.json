@@ -1,0 +1,48 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "large-type",
+  "title": "Large Type",
+  "description": "Display text fullscreen, like Alfred's Cmd+L",
+  "icon": "extension-icon.png",
+  "author": "leonidasesteban",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "show",
+      "title": "Show Large Type",
+      "subtitle": "Large Type",
+      "description": "Display the input text in a fullscreen overlay",
+      "mode": "no-view",
+      "arguments": [
+        {
+          "name": "text",
+          "placeholder": "Text to display",
+          "type": "text",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.83.1"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^1.0.11",
+    "@types/node": "^20.8.10",
+    "@types/react": "^18.3.3",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "build:helper": "swiftc -O swift/LargeType.swift -o assets/LargeType",
+    "build:icon": "swift swift/GenerateIcon.swift",
+    "prebuild": "npm run build:helper && npm run build:icon",
+    "predev": "npm run build:helper && npm run build:icon",
+    "build": "ray build",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "npx @raycast/api@latest publish"
+  }
+}
