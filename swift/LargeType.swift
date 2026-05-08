@@ -18,41 +18,71 @@ final class OverlayView: NSView {
         label.cell?.wraps = true
 
         addSubview(label)
-        let margin: CGFloat = 80
+        // ~8% horizontal padding, ~6% vertical (with sensible minimums for tiny screens).
+        // Bigger horizontal padding gives the text breathing room from the left/right edges,
+        // matching Alfred's Cmd+L look.
+        let horizontalPadding: CGFloat = max(120, frame.width * 0.08)
+        let verticalPadding: CGFloat = max(80, frame.height * 0.06)
+        let maxWidth = frame.width - horizontalPadding * 2
+        let maxHeight = frame.height - verticalPadding * 2
+
+        // Pin the label to exactly maxWidth and tell NSTextField to wrap at that width.
+        // Without preferredMaxLayoutWidth + an explicit width constraint, the field uses
+        // its single-line intrinsic width and overflows the screen on long text.
+        label.preferredMaxLayoutWidth = maxWidth
         NSLayoutConstraint.activate([
             label.centerXAnchor.constraint(equalTo: centerXAnchor),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: margin),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -margin),
-            label.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: margin),
-            label.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -margin),
+            label.widthAnchor.constraint(equalToConstant: maxWidth),
         ])
 
-        autoFitFontSize(in: frame.size, margin: margin)
+        let fontSize = OverlayView.bestFontSize(
+            for: text,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight
+        )
+        label.font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
     }
 
     required init?(coder: NSCoder) { fatalError("not implemented") }
 
-    private func autoFitFontSize(in size: NSSize, margin: CGFloat) {
-        let maxWidth = size.width - margin * 2
-        let maxHeight = size.height - margin * 2
-        var fontSize: CGFloat = min(size.height * 0.6, 480)
+    /// Binary-searches for the largest font size where the text fits within
+    /// the available area (maxWidth × maxHeight), allowing wrapping. Starts
+    /// from a generous upper bound so very short text can render very large.
+    static func bestFontSize(
+        for text: String,
+        maxWidth: CGFloat,
+        maxHeight: CGFloat
+    ) -> CGFloat {
+        let minSize: CGFloat = 16
+        let maxSize: CGFloat = max(maxHeight, 32)
 
-        while fontSize > 24 {
+        func fits(_ fontSize: CGFloat) -> Bool {
             let font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
             let attrs: [NSAttributedString.Key: Any] = [.font: font]
-            let bounds = (label.stringValue as NSString).boundingRect(
+            let bounds = (text as NSString).boundingRect(
                 with: NSSize(width: maxWidth, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: attrs
             )
-            if bounds.width <= maxWidth && bounds.height <= maxHeight {
-                break
-            }
-            fontSize -= 8
+            return bounds.width <= maxWidth && bounds.height <= maxHeight
         }
 
-        label.font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
+        if fits(maxSize) { return maxSize }
+        if !fits(minSize) { return minSize }
+
+        // Binary search to within 1pt
+        var lo = minSize
+        var hi = maxSize
+        while hi - lo > 1 {
+            let mid = (lo + hi) / 2
+            if fits(mid) {
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        return lo
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -95,14 +125,39 @@ let window = OverlayWindow(
 )
 window.level = .screenSaver
 window.isOpaque = false
-window.backgroundColor = NSColor.black.withAlphaComponent(0.85)
+window.backgroundColor = .clear
 window.hasShadow = false
 window.ignoresMouseEvents = false
 window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 window.isReleasedWhenClosed = false
 
-let view = OverlayView(text: text, frame: frame)
-window.contentView = view
+let overlay = OverlayView(text: text, frame: frame)
+overlay.translatesAutoresizingMaskIntoConstraints = false
+
+// Liquid Glass on macOS 26+ (Tahoe), VisualEffectView blur as fallback.
+let backgroundView: NSView
+if #available(macOS 26.0, *) {
+    let glass = NSGlassEffectView(frame: frame)
+    glass.tintColor = NSColor.black.withAlphaComponent(0.35)
+    glass.cornerRadius = 0
+    glass.contentView = overlay
+    backgroundView = glass
+} else {
+    let blur = NSVisualEffectView(frame: frame)
+    blur.material = .hudWindow
+    blur.blendingMode = .behindWindow
+    blur.state = .active
+    blur.addSubview(overlay)
+    NSLayoutConstraint.activate([
+        overlay.leadingAnchor.constraint(equalTo: blur.leadingAnchor),
+        overlay.trailingAnchor.constraint(equalTo: blur.trailingAnchor),
+        overlay.topAnchor.constraint(equalTo: blur.topAnchor),
+        overlay.bottomAnchor.constraint(equalTo: blur.bottomAnchor),
+    ])
+    backgroundView = blur
+}
+backgroundView.autoresizingMask = [.width, .height]
+window.contentView = backgroundView
 
 window.makeKeyAndOrderFront(nil)
 NSApp.activate(ignoringOtherApps: true)

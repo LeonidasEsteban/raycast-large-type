@@ -12,15 +12,7 @@
       "title": "Show Large Type",
       "subtitle": "Large Type",
       "description": "Display the input text in a fullscreen overlay",
-      "mode": "no-view",
-      "arguments": [
-        {
-          "name": "text",
-          "placeholder": "Text to display",
-          "type": "text",
-          "required": true
-        }
-      ]
+      "mode": "no-view"
     }
   ],
   "dependencies": {
